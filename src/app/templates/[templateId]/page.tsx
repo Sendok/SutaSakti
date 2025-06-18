@@ -64,7 +64,7 @@ export default function TemplateFormPage() {
           zodType = zodType.optional();
         }
         shape[field.id] = zodType;
-        defaults[field.id] = field.defaultValue || (field.type === 'number' ? undefined : '');
+        defaults[field.id] = field.defaultValue || ''; // Ensure defined default
       });
 
       setFormSchema(z.object(shape));
@@ -77,12 +77,21 @@ export default function TemplateFormPage() {
 
   const form = useForm<Record<string, any>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues,
+    defaultValues: defaultValues, // useForm will be initialized with these
   });
 
    useEffect(() => {
-    form.reset(defaultValues);
-  }, [defaultValues, form]);
+    // Reset form when defaultValues or template changes
+    if (template) {
+      const newDefaults: Record<string, any> = {};
+      template.formFields.forEach(field => {
+        newDefaults[field.id] = field.defaultValue || ''; // Ensure defined default
+      });
+      form.reset(newDefaults);
+      setDefaultValues(newDefaults); // also update state if necessary, though form.reset is key
+    }
+  }, [template, form.reset]); // Depend on template, not defaultValues state to avoid loop
+                               // form.reset is stable, so it's fine as a dependency
 
 
   const handleAiGenerate: SubmitHandler<Record<string, any>> = async (data) => {
@@ -118,11 +127,17 @@ export default function TemplateFormPage() {
         if (mainAiContentFieldId) {
              form.setValue(mainAiContentFieldId, aiResultText);
         } else {
-            const firstTextArea = template.formFields.find(f => f.type === 'textarea');
-            if (firstTextArea) {
-                form.setValue(firstTextArea.id, aiResultText);
+            // Fallback: find the first textarea or a specific field named 'generatedContent'
+            const targetField = template.formFields.find(f => f.type === 'textarea' && f.id !== (template.formFields.find(fld => fld.aiFieldMap === 'outline')?.id)) 
+                                || template.formFields.find(f => f.id === 'generatedContent');
+            if (targetField) {
+                form.setValue(targetField.id, aiResultText);
             } else {
-                form.setValue('generatedContent', aiResultText);
+                 // If no specific target, consider if a new field is needed or how to handle
+                 // For now, this might be an edge case or require specific template configuration
+                 console.warn("No designated field to place AI generated content for this template type without a primary content field.");
+                 // Potentially add a generic 'generatedContent' field if not present in form and display it in preview
+                 form.setValue('generatedContent', aiResultText); // This might not be in schema, handle with care
             }
         }
       }
@@ -185,7 +200,7 @@ export default function TemplateFormPage() {
                   <Controller
                     name={field.id}
                     control={form.control}
-                    defaultValue={field.defaultValue || (field.type === 'number' ? undefined : '')}
+                    defaultValue={field.defaultValue || ''} // Ensure defined default for Controller
                     render={({ field: controllerField, fieldState: { error } }) => (
                       <>
                         {field.type === 'textarea' ? (
@@ -194,10 +209,15 @@ export default function TemplateFormPage() {
                             placeholder={field.placeholder}
                             rows={field.rows || 3}
                             {...controllerField}
+                            value={controllerField.value ?? ''} // Ensure value is not undefined
                             className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
                           />
                         ) : field.type === 'select' && field.options ? (
-                           <Select onValueChange={controllerField.onChange} defaultValue={controllerField.value}>
+                           <Select 
+                              onValueChange={controllerField.onChange} 
+                              value={controllerField.value ?? ''} // Ensure value is not undefined
+                              defaultValue={controllerField.value ?? ''} // Ensure value is not undefined
+                            >
                             <SelectTrigger id={field.id} className={error ? 'border-destructive focus-visible:ring-destructive' : ''}>
                               <SelectValue placeholder={field.placeholder || `Select ${field.label}`} />
                             </SelectTrigger>
@@ -213,7 +233,8 @@ export default function TemplateFormPage() {
                             type={field.type}
                             placeholder={field.placeholder}
                             {...controllerField}
-                             className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
+                            value={controllerField.value ?? ''} // Ensure value is not undefined
+                            className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
                           />
                         )}
                         {error && <p className="text-sm text-destructive font-medium">{error.message}</p>}
@@ -290,19 +311,26 @@ export default function TemplateFormPage() {
             top: 0;
             width: 100%;
             margin: 0;
-            padding: 20px !important;
+            padding: 10px !important; /* Reduced padding for print */
             box-shadow: none !important;
             border: none !important;
-            font-size: 12pt;
+            font-size: 11pt; /* Slightly smaller font for print */
           }
            header, footer, button, .non-printable, [class*="non-printable"] {
             display: none !important;
           }
+          /* Ensure prose styles are maintained or adjusted for print */
           .printable-area .prose {
-
+             max-width: 100% !important; /* Allow prose to fill width */
+          }
+          .printable-area h1, .printable-area h2, .printable-area p {
+            /* Example: Adjust margins if needed for print */
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
           }
         }
       `}</style>
     </div>
   );
 }
+
