@@ -36,7 +36,6 @@ export default function TemplateFormPage() {
   const [generatedDocument, setGeneratedDocument] = useState<GeneratedDocument | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Dynamically build Zod schema and default values
   const [formSchema, setFormSchema] = useState<z.ZodObject<any>>(z.object({}));
   const [defaultValues, setDefaultValues] = useState<Record<string, any>>({});
 
@@ -54,7 +53,7 @@ export default function TemplateFormPage() {
             zodType = z.string().email({ message: "Invalid email address" });
             break;
           case 'number':
-            zodType = z.coerce.number(); // Use coerce for string input from forms
+            zodType = z.coerce.number();
             break;
           default:
             zodType = z.string();
@@ -67,12 +66,12 @@ export default function TemplateFormPage() {
         shape[field.id] = zodType;
         defaults[field.id] = field.defaultValue || (field.type === 'number' ? undefined : '');
       });
-      
+
       setFormSchema(z.object(shape));
       setDefaultValues(defaults);
       setIsLoading(false);
     } else {
-      router.push('/templates'); // Redirect if template not found
+      router.push('/templates');
     }
   }, [templateId, router]);
 
@@ -80,8 +79,7 @@ export default function TemplateFormPage() {
     resolver: zodResolver(formSchema),
     defaultValues: defaultValues,
   });
-  
-  // Update defaultValues when they change (e.g., after template load)
+
    useEffect(() => {
     form.reset(defaultValues);
   }, [defaultValues, form]);
@@ -100,8 +98,7 @@ export default function TemplateFormPage() {
         if (outlineField && data[outlineField.id]) {
           const result = await summarizeEssayOutline({ outline: data[outlineField.id] });
           aiResultText = result.essayDraft;
-           // Update form field or a dedicated state for AI content
-          form.setValue(template.formFields.find(f => f.id === 'outline')?.id || 'generatedContent', aiResultText); // Example, adjust target field
+          form.setValue(outlineField.id, aiResultText);
         } else {
           throw new Error("Outline field is missing or empty for academic paper AI generation.");
         }
@@ -112,25 +109,20 @@ export default function TemplateFormPage() {
             userInput += `${field.label}: ${data[field.id]}\n`;
           }
         });
-        
-        // A specific field that AI should primarily focus on enhancing, e.g., 'letterBody'
+
         const mainAiContentFieldId = template.formFields.find(f => f.id === 'letterBody' || f.id === 'servicesDescription')?.id;
 
         const result = await generateDocumentText({ documentType: template.name, userInput });
         aiResultText = result.generatedText;
 
-        if (mainAiContentFieldId && form.getValues(mainAiContentFieldId)) {
+        if (mainAiContentFieldId) {
              form.setValue(mainAiContentFieldId, aiResultText);
-        } else if (mainAiContentFieldId) {
-            form.setValue(mainAiContentFieldId, aiResultText);
         } else {
-             // Fallback: if no specific field, add to a general generated content field or a relevant textarea
             const firstTextArea = template.formFields.find(f => f.type === 'textarea');
             if (firstTextArea) {
                 form.setValue(firstTextArea.id, aiResultText);
             } else {
-                // Or show in a dedicated preview area
-                form.setValue('generatedContent', aiResultText); // Assuming a field exists or state for this
+                form.setValue('generatedContent', aiResultText);
             }
         }
       }
@@ -143,7 +135,7 @@ export default function TemplateFormPage() {
       setIsAiLoading(false);
     }
   };
-  
+
   const onSubmit: SubmitHandler<Record<string, any>> = (data) => {
     if (!template) return;
     const htmlContent = template.renderPreview(data);
@@ -165,13 +157,13 @@ export default function TemplateFormPage() {
       </div>
     );
   }
-  
+
   const Icon = template.icon;
 
   return (
     <div className="max-w-4xl mx-auto">
       <Card className="mb-8 shadow-xl">
-        <CardHeader className="bg-muted/30 relative">
+        <CardHeader className="bg-muted/30 relative p-6">
           <div className="flex items-center space-x-3">
             <Icon className="h-10 w-10 text-primary" />
             <div>
@@ -181,7 +173,7 @@ export default function TemplateFormPage() {
           </div>
            {template.premium && <Badge variant="secondary" className="absolute top-4 right-4 bg-accent text-accent-foreground">Premium</Badge>}
         </CardHeader>
-        
+
         {!showPreview ? (
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="p-6 space-y-6">
@@ -233,10 +225,10 @@ export default function TemplateFormPage() {
             </CardContent>
             <CardFooter className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 p-6 border-t">
               {template.aiFlow && template.aiFlow !== 'none' && (
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={form.handleSubmit(handleAiGenerate)} 
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={form.handleSubmit(handleAiGenerate)}
                   disabled={isAiLoading}
                   className="w-full sm:w-auto"
                 >
@@ -260,8 +252,8 @@ export default function TemplateFormPage() {
                 <Button variant="outline" onClick={() => setShowPreview(false)} className="w-full sm:w-auto">
                   <Edit className="mr-2 h-4 w-4" /> Edit Form
                 </Button>
-                <Button 
-                  onClick={() => window.print()} 
+                <Button
+                  onClick={() => window.print()}
                   className="w-full sm:w-auto"
                   aria-label="Print or Save as PDF"
                 >
@@ -274,7 +266,7 @@ export default function TemplateFormPage() {
       </Card>
 
       {showPreview && (
-          <Card className="mt-8">
+          <Card className="mt-8 non-printable">
             <CardHeader>
               <CardTitle>Advertisements</CardTitle>
             </CardHeader>
@@ -284,8 +276,7 @@ export default function TemplateFormPage() {
           </Card>
         )}
 
-      {/* Print-specific styles */}
-      <style jsx global>{\`
+      <style jsx global>{`
         @media print {
           body * {
             visibility: hidden;
@@ -299,17 +290,19 @@ export default function TemplateFormPage() {
             top: 0;
             width: 100%;
             margin: 0;
-            padding: 20px; /* Adjust as needed */
+            padding: 20px !important;
             box-shadow: none !important;
             border: none !important;
+            font-size: 12pt;
           }
-           header, footer, button, .non-printable {
+           header, footer, button, .non-printable, [class*="non-printable"] {
             display: none !important;
           }
+          .printable-area .prose {
+
+          }
         }
-      \`}</style>
+      `}</style>
     </div>
   );
 }
-    
-    
