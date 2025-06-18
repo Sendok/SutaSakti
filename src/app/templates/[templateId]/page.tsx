@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge'; // Added import for Badge
 import { useToast } from '@/hooks/use-toast';
 import { AlertCircle, CheckCircle, Download, Edit, Loader2, Wand2, Eye, Printer } from 'lucide-react';
 import DocumentPreviewClient from '@/components/DocumentPreviewClient'; // Renamed for clarity
@@ -170,7 +171,7 @@ export default function TemplateFormPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <Card className="mb-8 shadow-xl">
-        <CardHeader className="bg-muted/30">
+        <CardHeader className="bg-muted/30 relative">
           <div className="flex items-center space-x-3">
             <Icon className="h-10 w-10 text-primary" />
             <div>
