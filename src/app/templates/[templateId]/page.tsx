@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
@@ -6,7 +7,7 @@ import { useForm, Controller, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-import type { DocumentTemplate, FormFieldDefinition, GeneratedDocument } from '@/types';
+import type { DocumentTemplate, GeneratedDocument } from '@/types';
 import { documentTemplates } from '@/lib/documentTemplates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,11 +15,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge'; // Added import for Badge
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle, CheckCircle, Download, Edit, Loader2, Wand2, Eye, Printer } from 'lucide-react';
-import DocumentPreviewClient from '@/components/DocumentPreviewClient'; // Renamed for clarity
+import { Loader2, Wand2, Eye, Printer, Edit } from 'lucide-react';
+import DocumentPreviewClient from '@/components/DocumentPreviewClient';
 
 // AI Flow Imports
 import { summarizeEssayOutline } from '@/ai/flows/summarize-essay-outline';
@@ -285,7 +285,7 @@ export default function TemplateFormPage() {
         )}
 
       {/* Print-specific styles */}
-      <style jsx global>{`
+      <style jsx global>{\`
         @media print {
           body * {
             visibility: hidden;
@@ -307,7 +307,9 @@ export default function TemplateFormPage() {
             display: none !important;
           }
         }
-      `}</style>
+      \`}</style>
     </div>
   );
 }
+    
+    
