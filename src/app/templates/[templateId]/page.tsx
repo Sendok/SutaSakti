@@ -53,26 +53,20 @@ export default function TemplateFormPage() {
             zodType = z.string().email({ message: "Invalid email address" });
             break;
           case 'number':
-            zodType = z.coerce.number(); // Use coerce for numbers
+            zodType = z.coerce.number();
             break;
           default:
             zodType = z.string();
         }
         if (field.required) {
-          // For numbers, min(1) might not be appropriate if 0 is allowed.
-          // For strings, min(1) is fine for "required".
-          if (field.type === 'number') {
-            // If you want to ensure it's not empty, you might need a refine or a specific check
-            // For now, required for number means it must be a number.
-            // If 0 is a valid required number, this is fine.
-          } else {
+          if (field.type !== 'number') { // For strings, min(1) is fine for "required".
             zodType = zodType.min(1, { message: `${field.label} is required` });
           }
         } else {
           zodType = zodType.optional();
         }
         shape[field.id] = zodType;
-        defaults[field.id] = field.defaultValue || (field.type === 'number' ? '' : ''); // Default to empty string for uncontrolled -> controlled
+        defaults[field.id] = field.defaultValue || ''; // Initialize with empty string for controlled inputs
       });
 
       setFormSchema(z.object(shape));
@@ -85,24 +79,20 @@ export default function TemplateFormPage() {
 
   const form = useForm<Record<string, any>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues,
+    // Default values are set here and updated via form.reset in useEffect below
   });
 
    useEffect(() => {
+    // When template or its default values change, update the form's default values and reset
     if (template) {
       const newDefaults: Record<string, any> = {};
       template.formFields.forEach(field => {
-        newDefaults[field.id] = field.defaultValue || (field.type === 'number' ? '' : '');
+        newDefaults[field.id] = field.defaultValue || ''; // Ensure all fields have a default
       });
-      // Only reset if the calculated newDefaults are different from current form values
-      // This is a shallow comparison, might need deep if structure is complex
-      if (JSON.stringify(newDefaults) !== JSON.stringify(form.getValues())) {
-        form.reset(newDefaults);
-      }
-      // It might be better to just update defaultValues state and let useForm handle it if needed
-      // setDefaultValues(newDefaults); // This line might be redundant if form.reset does the job
+      setDefaultValues(newDefaults); // Update state for re-renders if necessary
+      form.reset(newDefaults); // Reset form with new defaults
     }
-  }, [template, form]); // form.reset is stable, form.getValues is not. Adding form as dep.
+  }, [template, form.reset]); // form.reset is a stable dependency from react-hook-form
 
 
   const handleAiGenerate: SubmitHandler<Record<string, any>> = async (data) => {
@@ -118,14 +108,12 @@ export default function TemplateFormPage() {
         if (outlineField && data[outlineField.id]) {
           const result = await summarizeEssayOutline({ outline: data[outlineField.id] });
           aiResultText = result.essayDraft;
-          // Update the 'generatedContent' field or a primary textarea
-          const targetContentField = template.formFields.find(f => f.id === 'generatedContent') || 
+          const targetContentField = template.formFields.find(f => f.id === 'generatedContent') ||
                                      template.formFields.find(f => f.type === 'textarea' && f.aiFieldMap !== 'outline');
           if (targetContentField) {
             form.setValue(targetContentField.id, aiResultText);
           } else {
-            // If this template specifically uses 'outline' to generate into itself or another field
-            form.setValue(outlineField.id, aiResultText); // Example: update outline field directly
+            form.setValue(outlineField.id, aiResultText);
           }
 
         } else {
@@ -152,8 +140,7 @@ export default function TemplateFormPage() {
             if (targetField) {
                 form.setValue(targetField.id, aiResultText);
             } else {
-                 console.warn("No designated field to place AI generated content for this template type without a primary content field.");
-                 form.setValue('generatedContent', aiResultText); 
+                 form.setValue('generatedContent', aiResultText);
             }
         }
       }
@@ -216,7 +203,7 @@ export default function TemplateFormPage() {
                   <Controller
                     name={field.id}
                     control={form.control}
-                    defaultValue={defaultValues[field.id] ?? ''} // Use processed defaultValues
+                    defaultValue={defaultValues[field.id] ?? ''}
                     render={({ field: controllerField, fieldState: { error } }) => (
                       <>
                         {field.type === 'textarea' ? (
@@ -232,7 +219,7 @@ export default function TemplateFormPage() {
                            <Select
                               onValueChange={controllerField.onChange}
                               value={controllerField.value ?? ''}
-                              defaultValue={controllerField.value ?? ''}
+                              defaultValue={defaultValues[field.id] ?? ''}
                             >
                             <SelectTrigger id={field.id} className={error ? 'border-destructive focus-visible:ring-destructive' : ''}>
                               <SelectValue placeholder={field.placeholder || `Select ${field.label}`} />
@@ -315,94 +302,93 @@ export default function TemplateFormPage() {
 
       <style jsx global>{`
         @media print {
-          html, body {
-            width: 100% !important;
-            height: auto !important;
-            overflow: visible !important;
-            background: white !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
+          /* Hide everything except the printable area and its children */
           body * {
             visibility: hidden !important;
+            animation: none !important;
+            transition: none !important;
           }
           .printable-area, .printable-area * {
             visibility: visible !important;
-            animation: none !important; /* Disable animations for printing */
-            transition: none !important; /* Disable transitions for printing */
           }
           .printable-area {
             display: block !important;
-            position: fixed !important; /* Changed to fixed for better full page behavior */
-            left: 0 !important;
-            top: 0 !important;
-            right: 0 !important; /* Added right for full width */
-            bottom: 0 !important; /* Added bottom for full height if content is short */
-            width: 100vw !important; /* Use viewport width */
-            min-height: 100vh !important; /* Use viewport height */
-            height: auto !important; /* Allow content to dictate height if longer */
-            margin: 0 !important;
-            padding: 15mm !important; /* Standard A4 padding, adjust as needed */
+            position: static !important; /* Changed from fixed to static for simpler flow */
+            width: auto !important; /* Let content dictate width */
+            min-height: 0 !important;
+            height: auto !important;
+            margin: 0 !important; /* Use padding for spacing */
+            padding: 15mm !important; /* Standard A4 padding */
             box-shadow: none !important;
             border: none !important;
             font-size: 11pt !important;
             background: white !important;
+            color: black !important; /* Ensure text is black */
             -webkit-print-color-adjust: exact !important;
             color-adjust: exact !important;
-            overflow: visible !important; /* Ensure content isn't clipped */
-            page-break-inside: auto !important; /* Let browser handle page breaks for main area */
+            overflow: visible !important;
           }
+
+          /* Hide common non-printable elements */
           header, footer, button, .non-printable, [class*="non-printable"], nav, aside, form, [role="dialog"], [role="alertdialog"], [role="tooltip"] {
             display: none !important;
             visibility: hidden !important; /* Double ensure */
           }
+          
+          /* General page styling for print */
+          html, body {
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important; /* Ensure white background for the page */
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
           .printable-area .prose {
              max-width: 100% !important;
-             font-size: inherit !important; /* Ensure prose uses the 11pt font size */
+             font-size: inherit !important;
           }
           .printable-area h1, .printable-area h2, .printable-area h3, .printable-area h4, .printable-area h5, .printable-area h6,
           .printable-area p, .printable-area li, .printable-area blockquote, .printable-area table {
             margin-top: 0.5em !important;
             margin-bottom: 0.5em !important;
-            color: black !important; /* Ensure text is black */
+            color: black !important;
             font-size: inherit !important;
           }
           .printable-area table, .printable-area th, .printable-area td {
-             border: 1px solid #ccc !important; /* Ensure table borders are visible */
+             border: 1px solid #ccc !important;
           }
-          .printable-area div, .printable-area section, .printable-area article, .printable-area p, .printable-area li {
-             page-break-inside: avoid !important; /* Avoid breaking these elements across pages */
+
+          /* Attempt to prevent elements from breaking across pages */
+          .printable-area div, .printable-area section, .printable-area article, 
+          .printable-area p, .printable-area li, .printable-area pre, .printable-area code,
+          .printable-area img, .printable-area table, .printable-area a {
+             page-break-inside: avoid !important;
           }
-          .printable-area pre, .printable-area code {
-            page-break-inside: avoid !important;
-            background-color: #f5f5f5 !important; /* Light background for code blocks */
-            border: 1px solid #ddd !important;
-            padding: 0.5em !important;
+          
+          img {
+            max-width: 100% !important; /* Ensure images fit within printable area */
+            height: auto !important;
+            border: none !important;
           }
           a {
             text-decoration: underline !important;
             color: #0000EE !important; /* Standard blue for links */
-            page-break-inside: avoid !important;
           }
-          a[href^="/"]:after, a[href^="http"]:after, a[href^="https"]:after {
-             content: "" !important; /* Remove URL printing for internal/external links if not desired */
+          /* Remove URL printing for links if not desired */
+           a[href^="/"]:after, a[href^="http"]:after, a[href^="https"]:after {
+             content: "" !important; 
           }
-          img {
-            max-width: 100% !important;
-            height: auto !important;
-            page-break-inside: avoid !important;
-            border: none !important; /* Remove borders from images */
-          }
-           /* Hide scrollbars specifically for print if any appear */
+          
+          /* Hide scrollbars specifically for print if any appear */
           ::-webkit-scrollbar {
             display: none !important;
-          }
-          /* Ensure no fixed elements other than .printable-area interfere */
-          body > *:not(.printable-area) {
-             display: none !important;
           }
         }
       `}</style>
     </div>
   );
 }
+
+    
