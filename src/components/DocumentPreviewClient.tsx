@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { GeneratedDocument } from '@/types';
@@ -12,7 +13,7 @@ export default function DocumentPreviewClient({ document }: DocumentPreviewClien
   // The actual preview logic is handled by template.renderPreview, this just displays it.
   return (
     <div className="py-6">
-      <h2 className="text-2xl font-bold text-center mb-6 font-headline">{document.title} Preview</h2>
+      <h2 className="text-2xl font-bold text-center mb-6 font-headline non-printable">{document.title} Preview</h2>
       <div 
         className="printable-area bg-white p-4 md:p-8 rounded-lg shadow-lg border border-gray-200 prose max-w-none"
         dangerouslySetInnerHTML={{ __html: document.content }}

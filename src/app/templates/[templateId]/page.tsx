@@ -53,18 +53,26 @@ export default function TemplateFormPage() {
             zodType = z.string().email({ message: "Invalid email address" });
             break;
           case 'number':
-            zodType = z.coerce.number();
+            zodType = z.coerce.number(); // Use coerce for numbers
             break;
           default:
             zodType = z.string();
         }
         if (field.required) {
-          zodType = zodType.min(1, { message: `${field.label} is required` });
+          // For numbers, min(1) might not be appropriate if 0 is allowed.
+          // For strings, min(1) is fine for "required".
+          if (field.type === 'number') {
+            // If you want to ensure it's not empty, you might need a refine or a specific check
+            // For now, required for number means it must be a number.
+            // If 0 is a valid required number, this is fine.
+          } else {
+            zodType = zodType.min(1, { message: `${field.label} is required` });
+          }
         } else {
           zodType = zodType.optional();
         }
         shape[field.id] = zodType;
-        defaults[field.id] = field.defaultValue || ''; // Ensure defined default
+        defaults[field.id] = field.defaultValue || (field.type === 'number' ? '' : ''); // Default to empty string for uncontrolled -> controlled
       });
 
       setFormSchema(z.object(shape));
@@ -77,21 +85,24 @@ export default function TemplateFormPage() {
 
   const form = useForm<Record<string, any>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues, // useForm will be initialized with these
+    defaultValues: defaultValues,
   });
 
    useEffect(() => {
-    // Reset form when defaultValues or template changes
     if (template) {
       const newDefaults: Record<string, any> = {};
       template.formFields.forEach(field => {
-        newDefaults[field.id] = field.defaultValue || ''; // Ensure defined default
+        newDefaults[field.id] = field.defaultValue || (field.type === 'number' ? '' : '');
       });
-      form.reset(newDefaults);
-      setDefaultValues(newDefaults); // also update state if necessary, though form.reset is key
+      // Only reset if the calculated newDefaults are different from current form values
+      // This is a shallow comparison, might need deep if structure is complex
+      if (JSON.stringify(newDefaults) !== JSON.stringify(form.getValues())) {
+        form.reset(newDefaults);
+      }
+      // It might be better to just update defaultValues state and let useForm handle it if needed
+      // setDefaultValues(newDefaults); // This line might be redundant if form.reset does the job
     }
-  }, [template, form.reset]); // Depend on template, not defaultValues state to avoid loop
-                               // form.reset is stable, so it's fine as a dependency
+  }, [template, form]); // form.reset is stable, form.getValues is not. Adding form as dep.
 
 
   const handleAiGenerate: SubmitHandler<Record<string, any>> = async (data) => {
@@ -107,7 +118,16 @@ export default function TemplateFormPage() {
         if (outlineField && data[outlineField.id]) {
           const result = await summarizeEssayOutline({ outline: data[outlineField.id] });
           aiResultText = result.essayDraft;
-          form.setValue(outlineField.id, aiResultText);
+          // Update the 'generatedContent' field or a primary textarea
+          const targetContentField = template.formFields.find(f => f.id === 'generatedContent') || 
+                                     template.formFields.find(f => f.type === 'textarea' && f.aiFieldMap !== 'outline');
+          if (targetContentField) {
+            form.setValue(targetContentField.id, aiResultText);
+          } else {
+            // If this template specifically uses 'outline' to generate into itself or another field
+            form.setValue(outlineField.id, aiResultText); // Example: update outline field directly
+          }
+
         } else {
           throw new Error("Outline field is missing or empty for academic paper AI generation.");
         }
@@ -127,17 +147,13 @@ export default function TemplateFormPage() {
         if (mainAiContentFieldId) {
              form.setValue(mainAiContentFieldId, aiResultText);
         } else {
-            // Fallback: find the first textarea or a specific field named 'generatedContent'
-            const targetField = template.formFields.find(f => f.type === 'textarea' && f.id !== (template.formFields.find(fld => fld.aiFieldMap === 'outline')?.id)) 
+            const targetField = template.formFields.find(f => f.type === 'textarea' && f.id !== (template.formFields.find(fld => fld.aiFieldMap === 'outline')?.id))
                                 || template.formFields.find(f => f.id === 'generatedContent');
             if (targetField) {
                 form.setValue(targetField.id, aiResultText);
             } else {
-                 // If no specific target, consider if a new field is needed or how to handle
-                 // For now, this might be an edge case or require specific template configuration
                  console.warn("No designated field to place AI generated content for this template type without a primary content field.");
-                 // Potentially add a generic 'generatedContent' field if not present in form and display it in preview
-                 form.setValue('generatedContent', aiResultText); // This might not be in schema, handle with care
+                 form.setValue('generatedContent', aiResultText); 
             }
         }
       }
@@ -200,7 +216,7 @@ export default function TemplateFormPage() {
                   <Controller
                     name={field.id}
                     control={form.control}
-                    defaultValue={field.defaultValue || ''} // Ensure defined default for Controller
+                    defaultValue={defaultValues[field.id] ?? ''} // Use processed defaultValues
                     render={({ field: controllerField, fieldState: { error } }) => (
                       <>
                         {field.type === 'textarea' ? (
@@ -209,14 +225,14 @@ export default function TemplateFormPage() {
                             placeholder={field.placeholder}
                             rows={field.rows || 3}
                             {...controllerField}
-                            value={controllerField.value ?? ''} // Ensure value is not undefined
+                            value={controllerField.value ?? ''}
                             className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
                           />
                         ) : field.type === 'select' && field.options ? (
-                           <Select 
-                              onValueChange={controllerField.onChange} 
-                              value={controllerField.value ?? ''} // Ensure value is not undefined
-                              defaultValue={controllerField.value ?? ''} // Ensure value is not undefined
+                           <Select
+                              onValueChange={controllerField.onChange}
+                              value={controllerField.value ?? ''}
+                              defaultValue={controllerField.value ?? ''}
                             >
                             <SelectTrigger id={field.id} className={error ? 'border-destructive focus-visible:ring-destructive' : ''}>
                               <SelectValue placeholder={field.placeholder || `Select ${field.label}`} />
@@ -233,7 +249,7 @@ export default function TemplateFormPage() {
                             type={field.type}
                             placeholder={field.placeholder}
                             {...controllerField}
-                            value={controllerField.value ?? ''} // Ensure value is not undefined
+                            value={controllerField.value ?? ''}
                             className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
                           />
                         )}
@@ -269,7 +285,7 @@ export default function TemplateFormPage() {
               <CardContent className="p-0">
                  <DocumentPreviewClient document={generatedDocument} />
               </CardContent>
-              <CardFooter className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 p-6 border-t">
+              <CardFooter className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 p-6 border-t non-printable">
                 <Button variant="outline" onClick={() => setShowPreview(false)} className="w-full sm:w-auto">
                   <Edit className="mr-2 h-4 w-4" /> Edit Form
                 </Button>
@@ -299,38 +315,94 @@ export default function TemplateFormPage() {
 
       <style jsx global>{`
         @media print {
+          html, body {
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           body * {
-            visibility: hidden;
+            visibility: hidden !important;
           }
           .printable-area, .printable-area * {
-            visibility: visible;
+            visibility: visible !important;
+            animation: none !important; /* Disable animations for printing */
+            transition: none !important; /* Disable transitions for printing */
           }
           .printable-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 10px !important; /* Reduced padding for print */
+            display: block !important;
+            position: fixed !important; /* Changed to fixed for better full page behavior */
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important; /* Added right for full width */
+            bottom: 0 !important; /* Added bottom for full height if content is short */
+            width: 100vw !important; /* Use viewport width */
+            min-height: 100vh !important; /* Use viewport height */
+            height: auto !important; /* Allow content to dictate height if longer */
+            margin: 0 !important;
+            padding: 15mm !important; /* Standard A4 padding, adjust as needed */
             box-shadow: none !important;
             border: none !important;
-            font-size: 11pt; /* Slightly smaller font for print */
+            font-size: 11pt !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            overflow: visible !important; /* Ensure content isn't clipped */
+            page-break-inside: auto !important; /* Let browser handle page breaks for main area */
           }
-           header, footer, button, .non-printable, [class*="non-printable"] {
+          header, footer, button, .non-printable, [class*="non-printable"], nav, aside, form, [role="dialog"], [role="alertdialog"], [role="tooltip"] {
+            display: none !important;
+            visibility: hidden !important; /* Double ensure */
+          }
+          .printable-area .prose {
+             max-width: 100% !important;
+             font-size: inherit !important; /* Ensure prose uses the 11pt font size */
+          }
+          .printable-area h1, .printable-area h2, .printable-area h3, .printable-area h4, .printable-area h5, .printable-area h6,
+          .printable-area p, .printable-area li, .printable-area blockquote, .printable-area table {
+            margin-top: 0.5em !important;
+            margin-bottom: 0.5em !important;
+            color: black !important; /* Ensure text is black */
+            font-size: inherit !important;
+          }
+          .printable-area table, .printable-area th, .printable-area td {
+             border: 1px solid #ccc !important; /* Ensure table borders are visible */
+          }
+          .printable-area div, .printable-area section, .printable-area article, .printable-area p, .printable-area li {
+             page-break-inside: avoid !important; /* Avoid breaking these elements across pages */
+          }
+          .printable-area pre, .printable-area code {
+            page-break-inside: avoid !important;
+            background-color: #f5f5f5 !important; /* Light background for code blocks */
+            border: 1px solid #ddd !important;
+            padding: 0.5em !important;
+          }
+          a {
+            text-decoration: underline !important;
+            color: #0000EE !important; /* Standard blue for links */
+            page-break-inside: avoid !important;
+          }
+          a[href^="/"]:after, a[href^="http"]:after, a[href^="https"]:after {
+             content: "" !important; /* Remove URL printing for internal/external links if not desired */
+          }
+          img {
+            max-width: 100% !important;
+            height: auto !important;
+            page-break-inside: avoid !important;
+            border: none !important; /* Remove borders from images */
+          }
+           /* Hide scrollbars specifically for print if any appear */
+          ::-webkit-scrollbar {
             display: none !important;
           }
-          /* Ensure prose styles are maintained or adjusted for print */
-          .printable-area .prose {
-             max-width: 100% !important; /* Allow prose to fill width */
-          }
-          .printable-area h1, .printable-area h2, .printable-area p {
-            /* Example: Adjust margins if needed for print */
-            margin-top: 0.5em;
-            margin-bottom: 0.5em;
+          /* Ensure no fixed elements other than .printable-area interfere */
+          body > *:not(.printable-area) {
+             display: none !important;
           }
         }
       `}</style>
     </div>
   );
 }
-
